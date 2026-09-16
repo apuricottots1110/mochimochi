@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CYBER TILES - BPM Synchronized Piano Game</title>
+  <style>
+    :root {
+      --neon-cyan: #00f3ff;
+      --neon-pink: #ff007f;
+      --neon-purple: #a100ff;
+      --neon-yellow: #ffe600;
+      --bg-dark: #080911;
+      --panel-bg: rgba(18, 20, 36, 0.75);
+    }
+
+    * {
+      box-sizing: border-box;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      padding: 10px;
+      background: radial-gradient(circle at 50% 20%, #1a0b2e 0%, var(--bg-dark) 80%);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+
+    /* 上部コントロールパネル */
+    #controls {
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 12px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 0, 127, 0.3);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(255, 0, 127, 0.1);
+      touch-action: auto;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+    }
+
+    input[type="text"], input[type="number"] {
+      touch-action: auto;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input[type="text"] {
+      width: 210px;
+      padding: 8px 12px;
+      background: rgba(5, 5, 12, 0.8);
+      border: 1px solid rgba(0, 243, 255, 0.4);
+      color: var(--neon-cyan);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--neon-cyan);
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+    }
+
+    input[type="number"] {
+      width: 60px;
+      padding: 7px;
+      background: rgba(5, 5, 12, 0.8);
+      border: 1px solid rgba(0, 243, 255, 0.4);
+      color: var(--neon-cyan);
+      font-weight: bold;
+      text-align: center;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    label {
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: #aaa;
+      font-weight: 600;
+    }
+
+    /* HUD (スコア / ライフ) */
+    #hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 340px;
+      margin-bottom: 10px;
+      padding: 8px 16px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    }
+
+    #score-container {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #score {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--neon-cyan);
+      text-shadow: 0 0 10px rgba(0, 243, 255, 0.7);
+      letter-spacing: 1px;
+    }
+
+    #combo {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--neon-pink);
+      min-height: 16px;
+      text-shadow: 0 0 8px rgba(255, 0, 127, 0.8);
+      letter-spacing: 1px;
+    }
+
+    #lives {
+      font-size: 22px;
+      letter-spacing: 3px;
+      filter: drop-shadow(0 0 8px rgba(255, 0, 127, 0.8));
+    }
+
+    /* ゲーム画面エリア */
+    #game-container {
+      width: 340px;
+      height: 520px;
+      background: rgba(10, 11, 20, 0.95);
+      position: relative;
+      overflow: hidden;
+      border: 2px solid rgba(255, 0, 127, 0.5);
+      border-radius: 16px;
+      box-shadow: 0 0 30px rgba(255, 0, 127, 0.25), inset 0 0 20px rgba(0, 0, 0, 0.8);
+      transition: background 0.1s ease, border-color 0.15s ease;
+      touch-action: none;
+      cursor: pointer;
+    }
+
+    #game-container.damage {
+      background: rgba(60, 0, 20, 0.95);
+      border-color: #ff0033;
+      box-shadow: 0 0 40px rgba(255, 0, 50, 0.6);
+    }
+
+    /* 背景の縦区切り線 */
+    .lane-line {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 1px;
+      background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.08) 20%, rgba(255, 255, 255, 0.08) 80%, transparent);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* レーン判定時の光線 */
+    .lane-light {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 85px;
+      background: linear-gradient(to top, rgba(0, 243, 255, 0.3), transparent 70%);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 2;
+      transition: opacity 0.15s ease-out;
+    }
+
+    /* 最下部 判定ライン */
+    .judge-line {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--neon-pink), var(--neon-cyan), transparent);
+      box-shadow: 0 0 15px var(--neon-cyan), 0 0 25px var(--neon-pink);
+      z-index: 4;
+      pointer-events: none;
+    }
+
+    #tiles-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    #effect-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 340px; height: 520px;
+      pointer-events: none;
+      z-index: 6;
+    }
+
+    /* タイルデザイン */
+    .tile {
+      position: absolute;
+      width: 85px;
+      height: 130px;
+      box-sizing: border-box;
+      padding: 3px;
+      pointer-events: none;
+    }
+
+    .tile.black {
+      background: linear-gradient(145deg, #ff007f, #7900ff);
+      border: 1.5px solid rgba(255, 0, 240, 0.8);
+      border-radius: 8px;
+      box-shadow: 0 0 16px rgba(255, 0, 127, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2);
+    }
+
+    .tile.black::after {
+      content: '';
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: 5px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 60%);
+    }
+
+    .tile.clicked {
+      background: rgba(0, 243, 255, 0.1) !important;
+      border: 1px solid rgba(0, 243, 255, 0.3) !important;
+      border-radius: 8px;
+      box-shadow: none !important;
+    }
+
+    .tile.missed {
+      background: rgba(255, 0, 50, 0.5) !important;
+      border: 1.5px solid #ff0033 !important;
+      border-radius: 8px;
+      box-shadow: 0 0 20px rgba(255, 0, 50, 0.8) !important;
+    }
+
+    /* オーバーレイ (スタート / 結果画面) */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 9, 16, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      padding: 20px;
+      text-align: center;
+      touch-action: auto;
+    }
+
+    #overlay-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--neon-cyan);
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+      text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+    }
+
+    /* 空の要素は表示しない修正 */
+    #rank-badge:empty,
+    #score-summary:empty {
+      display: none !important;
+    }
+
+    #rank-badge {
+      font-size: 72px;
+      font-weight: 900;
+      line-height: 1;
+      margin: 8px 0;
+      letter-spacing: -2px;
+      background: linear-gradient(135deg, #ffffff, var(--rank-color, #00f3ff));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 0 18px var(--rank-color, #00f3ff));
+    }
+
+    #score-summary {
+      font-size: 14px;
+      color: #d1d5db;
+      margin-bottom: 22px;
+      line-height: 1.6;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    #start-btn {
+      padding: 12px 36px;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      cursor: pointer;
+      background: linear-gradient(135deg, rgba(255, 0, 127, 0.2), rgba(121, 0, 255, 0.2));
+      color: #fff;
+      border: 2px solid var(--neon-pink);
+      border-radius: 30px;
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.5), inset 0 0 10px rgba(255, 0, 127, 0.3);
+      transition: all 0.2s ease;
+      touch-action: auto;
+    }
+
+    #start-btn:active {
+      transform: scale(0.95);
+      box-shadow: 0 0 25px var(--neon-pink);
+    }
+
+    #yt-player-container {
+      position: absolute;
+      top: -9999px;
+      left: -9999px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="controls">
+    <div class="input-row">
+      <input type="text" id="youtube-url" placeholder="YouTube動画のURL">
+      <label>BPM <input type="number" id="bpm-input" value="130" min="60" max="300"></label>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div id="score-container">
+      <div id="score">SCORE: 0</div>
+      <div id="combo"></div>
+    </div>
+    <div id="lives">❤️❤️❤️</div>
+  </div>
+
+  <div id="game-container">
+    <div class="lane-line" style="left: 85px;"></div>
+    <div class="lane-line" style="left: 170px;"></div>
+    <div class="lane-line" style="left: 255px;"></div>
+
+    <div class="lane-light" id="lane-light-0" style="left: 0px;"></div>
+    <div class="lane-light" id="lane-light-1" style="left: 85px;"></div>
+    <div class="lane-light" id="lane-light-2" style="left: 170px;"></div>
+    <div class="lane-light" id="lane-light-3" style="left: 255px;"></div>
+
+    <div class="judge-line"></div>
+
+    <div id="tiles-layer"></div>
+    
+    <canvas id="effect-canvas" width="340" height="520"></canvas>
+
+    <div id="overlay">
+      <div id="overlay-title">YouTubeのURLを入力してスタート</div>
+      <div id="rank-badge"></div>
+      <div id="score-summary"></div>
+      <button id="start-btn">GAME START</button>
+    </div>
+  </div>
+
+  <div id="yt-player-container">
+    <div id="player"></div>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+
+  <script>
+    const container = document.getElementById('game-container');
+    const tilesLayer = document.getElementById('tiles-layer');
+    const scoreDisplay = document.getElementById('score');
+    const comboDisplay = document.getElementById('combo');
+    const livesDisplay = document.getElementById('lives');
+    const overlay = document.getElementById('overlay');
+    const overlayTitle = document.getElementById('overlay-title');
+    const rankBadge = document.getElementById('rank-badge');
+    const scoreSummary = document.getElementById('score-summary');
+    const startBtn = document.getElementById('start-btn');
+    const youtubeUrlInput = document.getElementById('youtube-url');
+    const bpmInput = document.getElementById('bpm-input');
+
+    const canvas = document.getElementById('effect-canvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let shockwaves = [];
+    let floatingTexts = [];
+
+    const LANES = 4;
+    const LANE_WIDTH = 85;
+    const TILE_HEIGHT = 130;
+    const BOARD_HEIGHT = 520;
+
+    let score = 0;
+    let combo = 0;
+    let maxCombo = 0;
+    let lives = 3;
+    let speed = 250;
+    let rows = [];
+    let totalSpawnedTiles = 0;
+    let isPlaying = false;
+    let animationFrameId = null;
+    let lastTime = 0;
+
+    let player = null;
+    let isApiReady = false;
+
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('player', {
+        height: '200', width: '200',
+        events: {
+          'onReady': () => { isApiReady = true; },
+          'onStateChange': onPlayerStateChange
+        }
+      });
+    }
+
+    function onPlayerStateChange(event) {
+      if (!isPlaying) return;
+      if (event.data === YT.PlayerState.ENDED) {
+        stopGame('STAGE CLEAR!');
+      }
+    }
+
+    function extractVideoId(url) {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? match[2] : null;
+    }
+
+    function updateLivesDisplay() {
+      livesDisplay.innerText = '❤️'.repeat(Math.max(0, lives));
+    }
+
+    function updateComboDisplay() {
+      comboDisplay.innerText = combo >= 5 ? combo + ' COMBO!' : '';
+      if (combo > maxCombo) maxCombo = combo;
+    }
+
+    function getRank(rate) {
+      if (rate >= 95) return { rank: 'SS', color: '#ff00ff' };
+      if (rate >= 80) return { rank: 'S',  color: '#ffcc00' };
+      if (rate >= 60) return { rank: 'A',  color: '#00ffcc' };
+      if (rate >= 40) return { rank: 'B',  color: '#00f3ff' };
+      return { rank: 'C', color: '#aaaaaa' };
+    }
+
+    function triggerLaneLight(laneIndex) {
+      const lightEl = document.getElementById(`lane-light-${laneIndex}`);
+      if (lightEl) {
+        lightEl.style.opacity = '1';
+        setTimeout(() => { lightEl.style.opacity = '0'; }, 150);
+      }
+    }
+
+    function spawnParticles(x, y) {
+      const colors = ['#00f3ff', '#ff007f', '#ffffff', '#a100ff'];
+      for (let i = 0; i < 18; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = Math.random() * 220 + 80;
+        particles.push({
+          x: x, y: y,
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd,
+          radius: Math.random() * 4 + 2,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          alpha: 1, life: 0.45
+        });
+      }
+    }
+
+    function spawnShockwave(x, y, color = '#00f3ff') {
+      shockwaves.push({
+        x: x, y: y,
+        radius: 10,
+        maxRadius: 55,
+        color: color,
+        alpha: 1,
+        life: 0.35
+      });
+    }
+
+    function spawnFloatingText(text, x, y, color = '#00f3ff') {
+      floatingTexts.push({ text: text, x: x, y: y, vy: -70, alpha: 1, life: 0.5, color: color });
+    }
+
+    function updateAndDrawEffects(delta) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = shockwaves.length - 1; i >= 0; i--) {
+        let sw = shockwaves[i];
+        sw.radius += (sw.maxRadius / sw.life) * delta;
+        sw.alpha -= delta / sw.life;
+        if (sw.alpha <= 0) { shockwaves.splice(i, 1); continue; }
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, sw.alpha);
+        ctx.strokeStyle = sw.color;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = sw.color;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.x += p.vx * delta;
+        p.y += p.vy * delta;
+        p.alpha -= delta / p.life;
+        if (p.alpha <= 0) { particles.splice(i, 1); continue; }
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        let t = floatingTexts[i];
+        t.y += t.vy * delta;
+        t.alpha -= delta / t.life;
+        if (t.alpha <= 0) { floatingTexts.splice(i, 1); continue; }
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, t.alpha);
+        ctx.fillStyle = t.color;
+        ctx.font = '900 22px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = t.color;
+        ctx.fillText(t.text, t.x, t.y);
+        ctx.restore();
+      }
+    }
+
+    function createRow(y) {
+      totalSpawnedTiles++;
+      const blackLane = Math.floor(Math.random() * LANES);
+      const rowEl = document.createElement('div');
+      rowEl.style.position = 'absolute';
+      rowEl.style.transform = `translateY(${y}px)`;
+
+      const rowObj = { y: y, blackLane: blackLane, clicked: false, el: rowEl, tileEls: [] };
+
+      for (let i = 0; i < LANES; i++) {
+        const tile = document.createElement('div');
+        tile.classList.add('tile');
+        tile.style.left = (i * LANE_WIDTH) + 'px';
+        if (i === blackLane) tile.classList.add('black');
+
+        rowEl.appendChild(tile);
+        rowObj.tileEls.push(tile);
+      }
+
+      tilesLayer.appendChild(rowEl);
+      return rowObj;
+    }
+
+    function takeDamage(rowObj = null) {
+      lives--;
+      combo = 0;
+      updateLivesDisplay();
+      updateComboDisplay();
+
+      container.classList.add('damage');
+      setTimeout(() => container.classList.remove('damage'), 180);
+
+      if (rowObj) {
+        rowObj.clicked = true;
+        rowObj.tileEls[rowObj.blackLane].classList.remove('black');
+        rowObj.tileEls[rowObj.blackLane].classList.add('missed');
+      }
+
+      if (lives <= 0) {
+        stopGame('GAME OVER');
+      }
+    }
+
+    /* 画面コンテナ一括判定システム（隙間なし・絶対詰まらない判定） */
+    container.addEventListener('pointerdown', (e) => {
+      if (!isPlaying) return;
+      if (overlay.style.display !== 'none') return;
+
+      e.preventDefault();
+
+      const rect = container.getBoundingClientRect();
+      const touchX = e.clientX - rect.left;
+      const laneIndex = Math.min(LANES - 1, Math.max(0, Math.floor(touchX / LANE_WIDTH)));
+
+      handleInput(laneIndex);
+    });
+
+    function handleInput(laneIndex) {
+      if (!isPlaying) return;
+
+      // 画面上にある未処理(!clicked)の中で「一番下にある行」をターゲットにする
+      const activeRows = rows.filter(r => !r.clicked && r.y > -TILE_HEIGHT).sort((a, b) => b.y - a.y);
+      if (activeRows.length === 0) return;
+
+      const targetRow = activeRows[0];
+
+      if (laneIndex === targetRow.blackLane) {
+        // 正解ノーツをタップ！
+        targetRow.clicked = true;
+        targetRow.tileEls[laneIndex].classList.remove('black');
+        targetRow.tileEls[laneIndex].classList.add('clicked');
+
+        score++;
+        combo++;
+
+        const tapX = laneIndex * LANE_WIDTH + (LANE_WIDTH / 2);
+        const tapY = Math.min(BOARD_HEIGHT - 20, Math.max(20, targetRow.y + (TILE_HEIGHT / 2)));
+
+        triggerLaneLight(laneIndex);
+        spawnParticles(tapX, tapY);
+        spawnShockwave(tapX, tapY, '#00f3ff');
+        spawnFloatingText('PERFECT!', tapX, tapY, '#00f3ff');
+
+        if (combo > 0 && combo % 30 === 0 && lives < 3) {
+          lives++;
+          updateLivesDisplay();
+        }
+
+        scoreDisplay.innerText = 'SCORE: ' + score;
+        updateComboDisplay();
+      } else {
+        // 間違えた場所（空枠など）をタップ！一番下ノーツをMISS処理にしてブロック解除
+        targetRow.clicked = true;
+        targetRow.tileEls[targetRow.blackLane].classList.remove('black');
+        targetRow.tileEls[targetRow.blackLane].classList.add('missed');
+
+        const tapX = laneIndex * LANE_WIDTH + (LANE_WIDTH / 2);
+        const tapY = Math.min(BOARD_HEIGHT - 20, Math.max(20, targetRow.y + (TILE_HEIGHT / 2)));
+
+        triggerLaneLight(laneIndex);
+        spawnShockwave(tapX, tapY, '#ff0033');
+        spawnFloatingText('MISS!', tapX, tapY, '#ff0033');
+        takeDamage();
+      }
+    }
+
+    function startGame() {
+      if (!isApiReady) {
+        alert('YouTube APIの読み込み中です。少々お待ちください。');
+        return;
+      }
+
+      const url = youtubeUrlInput.value.trim();
+      const videoId = extractVideoId(url);
+
+      if (!videoId) {
+        alert('有効なYouTubeのURLを入力してください！');
+        return;
+      }
+
+      tilesLayer.innerHTML = '';
+      rows = [];
+      particles = [];
+      shockwaves = [];
+      floatingTexts = [];
+      score = 0;
+      combo = 0;
+      maxCombo = 0;
+      lives = 3;
+      totalSpawnedTiles = 0;
+      scoreDisplay.innerText = 'SCORE: 0';
+      updateLivesDisplay();
+      updateComboDisplay();
+      
+      rankBadge.innerText = '';
+      scoreSummary.innerText = '';
+      overlay.style.display = 'none';
+
+      const bpm = parseInt(bpmInput.value) || 120;
+      speed = (TILE_HEIGHT * bpm) / 60;
+
+      player.loadVideoById(videoId);
+      player.playVideo();
+
+      isPlaying = true;
+      lastTime = performance.now();
+      gameLoop(lastTime);
+    }
+
+    function stopGame(titleText) {
+      isPlaying = false;
+      cancelAnimationFrame(animationFrameId);
+      
+      if (player && player.pauseVideo) {
+        player.pauseVideo();
+      }
+
+      let maxTiles = totalSpawnedTiles;
+      const duration = (player && player.getDuration) ? player.getDuration() : 0;
+      if (duration > 0) {
+        const bpm = parseInt(bpmInput.value) || 120;
+        maxTiles = Math.max(totalSpawnedTiles, Math.floor((duration * bpm) / 60));
+      }
+
+      const rate = maxTiles > 0 ? Math.min(100, Math.floor((score / maxTiles) * 100)) : 0;
+      const rankInfo = getRank(rate);
+
+      overlayTitle.innerText = titleText;
+      rankBadge.innerText = rankInfo.rank;
+      rankBadge.style.setProperty('--rank-color', rankInfo.color);
+      scoreSummary.innerHTML = `CLEAR RATE: <b>${rate}%</b><br>SCORE: <b>${score}</b> / ${maxTiles}<br>MAX COMBO: <b>${maxCombo}</b>`;
+      
+      startBtn.innerText = 'RETRY';
+      overlay.style.display = 'flex';
+    }
+
+    function gameLoop(now) {
+      if (!isPlaying) return;
+
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (rows.length === 0) {
+        rows.push(createRow(-TILE_HEIGHT));
+      } else {
+        const lastRow = rows[rows.length - 1];
+        if (lastRow.y >= 0) {
+          rows.push(createRow(lastRow.y - TILE_HEIGHT));
+        }
+      }
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        row.y += speed * delta;
+        row.el.style.transform = `translateY(${row.y}px)`;
+      }
+
+      if (rows.length > 0 && rows[0].y >= BOARD_HEIGHT - (TILE_HEIGHT / 2)) {
+        if (!rows[0].clicked) {
+          takeDamage(rows[0]);
+        }
+        tilesLayer.removeChild(rows[0].el);
+        rows.shift();
+      }
+
+      updateAndDrawEffects(delta);
+      animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    startBtn.addEventListener('click', startGame);
+  </script>
+</body>
+</html>
